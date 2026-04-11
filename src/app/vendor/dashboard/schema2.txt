@@ -1,0 +1,105 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.approvals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  request_id uuid,
+  approver_id uuid,
+  decision text CHECK (decision = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  decided_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT approvals_pkey PRIMARY KEY (id),
+  CONSTRAINT approvals_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.purchase_requests(id),
+  CONSTRAINT approvals_approver_id_fkey FOREIGN KEY (approver_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.category_rules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  org_id uuid,
+  category text,
+  benchmark_price numeric,
+  target_multiplier numeric DEFAULT 0.90,
+  max_multiplier numeric DEFAULT 1.10,
+  walkaway_multiplier numeric DEFAULT 1.15,
+  CONSTRAINT category_rules_pkey PRIMARY KEY (id),
+  CONSTRAINT category_rules_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organisations(id)
+);
+CREATE TABLE public.negotiation_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  negotiation_id uuid,
+  sender_type text CHECK (sender_type = ANY (ARRAY['buyer_ai'::text, 'vendor_human'::text, 'buyer_human'::text])),
+  sender_id uuid,
+  content text,
+  reasoning text,
+  price_offered numeric,
+  terms_offered text,
+  created_at timestamp with time zone DEFAULT now(),
+  vendor_recommendation text,
+  vendor_recommendation_action text,
+  CONSTRAINT negotiation_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT negotiation_messages_negotiation_id_fkey FOREIGN KEY (negotiation_id) REFERENCES public.negotiations(id)
+);
+CREATE TABLE public.negotiations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  request_id uuid,
+  vendor_id uuid,
+  org_id uuid,
+  target_price numeric,
+  max_price numeric,
+  walkaway_price numeric,
+  current_offer_buyer numeric,
+  current_offer_vendor numeric,
+  round_count integer DEFAULT 0,
+  final_price numeric,
+  status text DEFAULT 'active'::text CHECK (status = ANY (ARRAY['pending_parameters'::text, 'active'::text, 'agreed'::text, 'escalated'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT negotiations_pkey PRIMARY KEY (id),
+  CONSTRAINT negotiations_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.purchase_requests(id),
+  CONSTRAINT negotiations_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organisations(id)
+);
+CREATE TABLE public.organisations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  slug text NOT NULL UNIQUE,
+  CONSTRAINT organisations_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  org_id uuid,
+  vendor_id uuid,
+  role text CHECK (role = ANY (ARRAY['admin'::text, 'buyer'::text, 'approver'::text, 'vendor'::text])),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
+  CONSTRAINT profiles_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organisations(id)
+);
+CREATE TABLE public.purchase_orders (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  negotiation_id uuid,
+  org_id uuid,
+  vendor_id uuid,
+  final_price numeric,
+  quantity integer,
+  total_value numeric,
+  payment_terms text,
+  delivery_weeks integer,
+  warranty_years integer,
+  po_number text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT purchase_orders_pkey PRIMARY KEY (id),
+  CONSTRAINT purchase_orders_negotiation_id_fkey FOREIGN KEY (negotiation_id) REFERENCES public.negotiations(id),
+  CONSTRAINT purchase_orders_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organisations(id)
+);
+CREATE TABLE public.purchase_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  org_id uuid,
+  requester_id uuid,
+  raw_text text,
+  category text,
+  quantity integer,
+  budget numeric,
+  timeline integer,
+  status text DEFAULT 'draft'::text CHECK (status = ANY (ARRAY['draft'::text, 'pending_approval'::text, 'approved'::text, 'negotiating'::text, 'complete'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT purchase_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT purchase_requests_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organisations(id),
+  CONSTRAINT purchase_requests_requester_id_fkey FOREIGN KEY (requester_id) REFERENCES public.profiles(id)
+);
